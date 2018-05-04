@@ -30,9 +30,12 @@
 
 #include "server.h"
 #include "cluster.h"
+#include "acl.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
+
+void loadAclFile(char *filename);
 
 /*-----------------------------------------------------------------------------
  * Config file name-value maps.
@@ -308,6 +311,8 @@ void loadServerConfigFromString(char *config) {
             }
         } else if (!strcasecmp(argv[0],"include") && argc == 2) {
             loadServerConfig(argv[1],NULL);
+        } else if (!strcasecmp(argv[0], "aclfile") && argc == 2) {
+            loadAclFile(argv[1]);
         } else if (!strcasecmp(argv[0],"maxclients") && argc == 2) {
             server.maxclients = atoi(argv[1]);
             if (server.maxclients < 1) {
@@ -804,6 +809,38 @@ void loadServerConfig(char *filename, char *options) {
     }
     loadServerConfigFromString(config);
     sdsfree(config);
+}
+
+/**
+ *  * Load Access control list file
+ *   */
+void loadAclFile(char *filename) {
+    ACL_ENABLE = 1;
+    redisLog(REDIS_NOTICE, "+---------------------- NOTICE -----------------------+");
+    redisLog(REDIS_NOTICE, " access control file: %s", filename);
+    redisLog(REDIS_NOTICE, "+-----------------------------------------------------+");
+    
+    FILE *handle;
+    char line[1025];
+
+    if ( NULL == (handle = fopen(filename, "r")) ) {
+        redisLog(REDIS_WARNING, "Fatal error, can't open accecc control file '%s'", filename);
+        exit(1);
+    }
+
+    while (fgets(line, sizeof line, handle)) {
+        trim(line);
+        if ('#' == line[0]) continue;
+        redisLog(REDIS_NOTICE, " %s", line);
+        struct acl_node node = parse_acl_node(line);
+        ACL_NODES[ACL_NODES_TAIL++] = node;
+    }
+
+    fclose(handle);
+    
+    redisLog(REDIS_NOTICE, "+-----------------------------------------------------+");
+    //disploy_acl_nodes();
+    //redisLog(REDIS_NOTICE, "+-----------------------------------------------------+");
 }
 
 /*-----------------------------------------------------------------------------
